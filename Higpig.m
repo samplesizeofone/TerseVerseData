@@ -1,117 +1,122 @@
 BeginPackage["Higpig`"];
 
-filterPartOfSpeech::usage = "Filters wordList by partsOfSpeech. Options include \"exact\"."
-
-rhymeNoun::usage = ""
-rhymeAdjective::usage = ""
-possibleNounSynonyms::usage = ""
-possibleAdjectiveSynonyms::usage = ""
-allWords
+rhymeWord::usage = "Gives words rhyming with rhymeWord[word_]";
 
 Begin["`Private`"]
 
-passThroughOption[option_] :=
-    option
-
-passThroughOption[option_ -> "default"] :=
-    Sequence[]
+(* Utility *)
+stripStress[phoneme_] :=
+    StringReplace[phoneme, x_ /; DigitQ[x] -> ""]
 
 (* Filters *)
-partsOfSpeechQ[word_, targetPartsOfSpeech_, OptionsPattern[]] :=
+onlyNounQ[word_] :=
+    partsOfSpeech[word] == {"Noun"}
+
+onlyAdjectiveQ[word_]
+    partsOfSpeech[word] == {"Adjective"}
+
+nounQ[word_] :=
+    SubsetQ[partsOfSpeech[word], {"Noun"}]
+
+adjectiveQ[word_] :=
+    SubsetQ[partsOfSpeech[word], {"Adjective"}]
+
+(* WordData *)
+listPartsOfSpeech[word_, targetPartsOfSpeech_] :=
     Module[{partsOfSpeech},
         partsOfSpeech = WordData[word, "PartsOfSpeech"];
         If[Head[partsOfSpeech] === WordData,
-            Return[False]
-        ];
-        If[OptionValue["exact"],
-            SubsetQ[partsOfSpeech, targetPartsOfSpeech]
-            && SubsetQ[targetPartsOfSpeech, partsOfSpeech],
-            SubsetQ[WordData[word, "PartsOfSpeech"], targetPartsOfSpeech]
+            Null,
+            partsOfSpeech
         ]
     ]
-Options[partsOfSpeechQ] = {"exact" -> True}
-
-nounQ[word_] :=
-    partsOfSpeech[word, {"Noun"}]
-
-adjectiveQ[word_]
-    partsOfSpeech[word, {"Adjective"}]
-
-filterPartOfSpeech[wordList_, partsOfSpeech_, OptionsPattern[]] :=
-    Cases[
-        wordList,
-        word_/;partsOfSpeechQ[
-                word,
-                partsOfSpeech,
-                passThroughOption["exact" -> OptionValue["exact"]]
-            ]
-    ]
-Options[filterPartOfSpeech] = {"exact" -> "default"}
-
-(* WordData *)
-possibleSynonyms[word_] :=
-    Flatten[#[[2]]& /@ WordData[word, "Synonyms"]]
-
-possiblePartsOfSpeechSynonyms[word_, partsOfSpeech_, OptionsPattern[]] :=
-    filterPartOfSpeech[
-        possibleSynonyms[word],
-        partsOfSpeech,
-        passThroughOption["exact" -> OptionValue["exact"]]
-    ]
-Options[possiblePartsOfSpeechSynonyms] = {"exact" -> "default"}
-
-possibleNounSynonyms[word_] :=
-    possiblePartsOfSpeechSynonyms[word, {"Noun"}]
-
-possibleAdjectiveSynonyms[word_] :=
-    possiblePartsOfSpeechSynonyms[word, {"Adjective"}]
 
 (* Rhyme database *)
-rhymeCSV = Drop[Import["Projects/TerseVerseData/rhyme.tsv"], 1]
+arpabetVowels = {"AO", "AA", "IY", "UW", "EH", "IH", "UH", "AH", 
+   "AX", "AE", "EY", "AY", "OW", "AW", "OY", "ER"};
 
-allRhymes = <|
-    Table[
-        rhymeCSV[[i, 2]] -> Flatten[Table[{#,j - 2}& /@ StringSplit[rhymeCSV[[i, j]], ", "], {j, 3, 12}], 1],
-        {i, Length[rhymeCSV]}
-    ]
-|>
+countSyllables[phonemes_] :=
+    Length[Cases[phonemes, phoneme_ /; MemberQ[arpabetVowels, phoneme]]]
 
-allWords = Keys[allRhymes]
-
-syllableCount = <|
-    Table[
-        word -> Length[WordData[word, "Hyphenation"]],
-        {word, allWords}
-    ]
-|>
-
-rhymeWord[word_, OptionsPattern[]] :=
-    Module[{rhymes},
-        rhymes = Cases[
-            allRhymes[word],
-            {rhyme_, syllables_}/;OptionValue["syllables"] === Null || OptionValue["syllables"] === syllables :> rhyme
+findLastSyllables[phonemes_] :=
+    Module[{vowelPositions, numberOfSyllables},
+        vowelPositions =
+            Position[
+                phonemes,
+                phoneme_/;MemberQ[arpabetVowels, phoneme]
+            ];
+        If[countSyllables[phonemes] >= 2,
+            numberOfSyllables = 2,
+            numberOfSyllables = 1
         ];
-        If[OptionValue["partsOfSpeech"] =!= Null,
-            rhymes =
-                filterPartOfSpeech[
-                    rhymes,
-                    OptionValue["partsOfSpeech"],
-                    passThroughOption["exact" -> OptionValue["exact"]]
+        If[Length[vowelPositions] >= numberOfSyllables,
+            Take[
+                phonemes,
+                {vowelPositions[[-numberOfSyllables, 1]], Length[phonemes]}
+            ],
+            {}
+        ]
+    ]
+
+cmuToWordPronunciations[cmu_] :=
+    Module[{wordPronounciations, word, pronounciation},
+        wordPronounciations = <||>;
+        Do[
+            {word, pronounciation} = {
+                entry[[1]],
+                Drop[entry, 1]
+            };
+            If[Not[KeyExistsQ[wordPronounciations, word]],
+                wordPronounciations[word] = {}
+            ];
+            AppendTo[wordPronounciations[word], stripStress/@pronounciation],
+            {entry, cmu}
+        ];
+        wordPronounciations
+    ]
+
+wordPronounciationsToWordEndings[wordPronounciations_] :=
+    Module[{endings, lastSyllables},
+        <|
+            Flatten[
+                Table[
+                    endings =
+                        Table[
+                            findLastSyllables[pronounciation],
+                            {pronounciation, wordPronounciations[word]}
+                        ] /. {} :> Sequence[];
+                    word->endings,
+                    {word, Keys[wordPronounciations]}
                 ]
-        ];
-        rhymes
+            ] /. (word_->{}) :> Sequence[]
+        |>
     ]
-Options[rhymeWord] = {
-    "syllables" -> Null,
-    "partsOfSpeech" -> Null,
-    "exact" -> "default"
-}
 
-rhymeNoun[word_] :=
-    rhymeWord[word, "partsOfSpeech" -> {"Noun"}, "syllables" -> 1]
+wordEndingsToEndingWords[wordEndings_] :=
+    Module[{endingWords},
+        endingWords = <||>;
+        Do[
+            If[Not[KeyExistsQ[endingWords, ending]],
+                endingWords[ending] = {}
+            ];
+            AppendTo[endingWords[ending], word],
+            {word, Keys[wordEndings]},
+            {ending, wordEndings[word]}
+        ];
+        endingWords
+    ]
 
-rhymeAdjective[word_] :=
-    rhymeWord[word, "partsOfSpeech" -> {"Adjective"}, "syllables" -> 1]
+rhymeWord[word_] :=
+    Complement[
+        Flatten[Higpig`endingWords /@ Higpig`wordEndings[word]],
+        {word}
+    ]
 
 End[]
+
+cmu = Import["Projects/TerseVerseData/derived_data/cmu.csv"];
+wordPronounciations = `Private`cmuToWordPronunciations[cmu];
+wordEndings = `Private`wordPronounciationsToWordEndings[wordPronounciations];
+endingWords = `Private`wordEndingsToEndingWords[wordEndings];
+
 EndPackage[]
