@@ -1,6 +1,7 @@
 BeginPackage["Higpig`"];
 
-rhymeWord::usage = "Gives words rhyming with rhymeWord[word_]";
+rhymeWord::usage = "Gives words rhyming with word in rhymeWord[word_]";
+countSyllables::usage = "Gives the number of syllables in phonemes in countSyllables[phonemes_]";
 
 Begin["`Private`"]
 
