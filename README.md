@@ -11,10 +11,10 @@ A Hig Pig, also known as Terse Verse, is a riddle who's answer consists of two r
 * What do you call an adacious flourish? A "brave wave".
 
 ## Current features
-Provides a python script for extracting CMU pronounciation data to a CSV and a Mathematica package the provides a simple interface for listing rhymes.
+Provides a python script for extracting CMU pronounciation data to a CSV and a Mathematica package that provides a simple interface for listing rhymes.
 
 ## Planned features
-A Mathematica interface for suggesting possible Hig Pigs by selecting synonyms to the solution words. The selected synonyms will probably be of the form <Adjective> <Noun>.
+A Mathematica interface for suggesting possible Hig Pigs by selecting synonyms to the solution words. The selected synonyms will probably be of the form "Adjective Noun".
 
 Once complete, I plan to provide versioned access to a generated database of possible Hig Pigs to alleviate the need for Mathematica to be present.
 
